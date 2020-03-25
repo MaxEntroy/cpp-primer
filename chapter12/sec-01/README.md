@@ -92,3 +92,33 @@ q:如何对于thow的函数进行测试？有什么问题？
 >同上，参考google gtest给出的断言。
 >
 >问题在于，不能测试exception message，这是一个看起来可能很严重的失误，只用断言判断异常类型不足以解决异常类型一直但异常信息不一致的情形
+
+- demo-02
+
+这个case主要用来解决习题。
+
+q:why is `std::initializer_list` often passed by value?
+>参考stackoverflow给出的解答，结论就是开销不大，对性能影响不大。
+
+[why is `std::initializer_list` often passed by value?](https://stackoverflow.com/questions/17803475/why-is-stdinitializer-list-often-passed-by-value)
+
+q:为什么常成员函数返回引用时只能返回常引用？非常成员函数返回引用时是否只能返回非常引用?
+>对于第一个问题，cpp-primer在7.3给了明确的说明：
+A const member function that returns *this as a reference should have a return type that is a reference to const.
+>
+>进一步来说，const member function会对存入参数this进行修饰，即const this.所以，对于一个常对象，只能通过常引用接受。
+>
+>对于第二个问题，则不是，非常对象，可以用非常引用也可以用常引用接受。
+
+q:In our check function we didn’t check whether i was greater than zero. Why is it okay to omit that check?
+>这一道题非常赞，可以思考。
+其实合理的范围是[0, size)，但是确实没有判断负数。因为这里采用了无符号数的形式，只要传递进来负数。
+大概率会被干掉。但是也有漏记漏洞。-1是最大的负数，那只要这个负数足够小，转换成正数后在[0, size)之间，也是bug.
+所以，还是少用无符号数。
+
+q:explicit constructor的优缺点？
+>优点，显然，避免automatic conversion,因为后者通常会带来一些hidden bug.
+缺点，需要automatic conversion转换的场景，需要显示进行构造，有一点额外的工作量。
+但是我觉得额外工作量不重要，因为也没有太多。但是能避免bug则很重要。
+
+[What does the explicit keyword mean?](https://stackoverflow.com/questions/121162/what-does-the-explicit-keyword-mean)
