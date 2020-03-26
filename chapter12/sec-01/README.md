@@ -73,6 +73,154 @@ q:当我们讨论一个类的copying,assigning,destroying时，我们在讨论�
 >shared_ptr<vector<string>> data;这个成员的copying, assigning, destroying的语义，符合我们本例的讨论。
 所以，不用额外的操作
 
+### 12.1.2. Managing memory directly
+
+本小节对于new和delete的一些细节进行讨论，根本目的还是告诉我们尽量使用smart pointer.
+
+**caution: Managing Dynamic Memory Is Error-Prone**<br>
+There are three common problems with using new and delete to manage dynamic memory:
+- Forgetting to delete memory
+- Using an object after it has been deleted.
+- Deleting the same memory twice
+
+**Best Practices: You can avoid all of these problems by using smart pointers exclusively.**
+
+#### Using new to Dynamically Allocate and Initialize Objects
+
+q:什么是value initialization?和dafault initialization有什么区别?
+>We can usually omit the value and supply only a size. In this case the library creates a value-initialized element initializer for us.
+>
+>前者对于built-in type，不会使用任意值，比如int则会使用0进行初始化。class type则是default constructor。而后者对于
+built-in type则是使用任意值进行初始化，而class type则是default constructor.
+
+#### Dynamically Allocated const Objects
+
+#### Memory Exhaustion
+
+q:new (nothrow) int 和 new int有什么区别？
+>对于后者，if allocation fails, new throws std::bad_alloc
+对于前者，if allocation fails, new returns a null pointer
+
+#### Freeing Dynamic Memory
+
+q:delete执行什么操作?
+>Like new, a delete expression performs two actions: It destroys the object to which
+its given pointer points, and it frees the corresponding memory.
+
+#### Pointer Values and delete
+
+q:对于delete而言，什么行为会触发undefined behavior?
+- Deleting a pointer to memory that was not allocated by new(即释放非动态类型内存)
+- deleting the same pointer value more than once(同一块动态内存释放两次)
+
+#### Dynamically Allocated Objects Exist until They Are Freed
+
+#### Resetting the Value of a Pointer after a delete...
+
+q:dangling pointer是什么意思？这会导致什么问题?应该如何解决?
+>A dangling pointer is one that refers to memory that once held an object but no longer does so.
+即释放动态内存后的指针，但是该指针还保留着之前动态内存的地址。由于这块内存已经被释放了，所以如果继续访问会出问题，因为
+这块内存现在保留的可能是任意值(垃圾值)，当然也有可能这块内存又被分配给别人了。总是如果使用dangling pointer所指向的内存，
+会有可能触发hidden bugs.
+>
+>解决办法就是对dangling pointer赋予nullptr.
+
+#### ...Provides Only Limited Protection
+
+我们看这样一段代码
+```cpp
+int *p(new int(42)); // p points to dynamic memory 
+auto q = p; // p and q pointtothesamememory 
+delete p; // invalidates both p and q
+p = nullptr; // indicates that p is no longer bound to an object
+```
+
+q:上面这段代码想反映什么问题?
+>A fundamental problem with dynamic memory is that there can be several pointers that point to the same memory.
+>
+>如果我们想用new/delete来管理动态内存，那么很有可能有多个指针指向同一块动态内存。因为指针之间的copy,assign是可能的。
+此时，如果我们通过某一个指针释放了这块动态内存，并且解决了dangling pointer，但是难得是我们很难知道还有哪些指针也同样指向这块内存。如果那些指针不能对dangling pointer进行操作，一样会碰到现在的问题。
+
+### 12.1.3 Using shared_ptrs with new
+
+看下面这段代码
+
+```cpp
+shared_ptr<int> p1 = new int(1024); // error: must use direct initialization
+shared_ptr<int> p2(new int(1024)); // ok: uses direct initialization
+```
+
+q:smard pointer是否接收普通指针的隐式转换?
+>No.The smart pointer constructors that take pointers are explicit (§ 7.5.4, p. 296). Hence, we cannot implicitly convert a built-in pointer to a smart pointer
+
+
+#### Don’t Mix Ordinary Pointers and Smart Pointers ...
+
+这一小节我觉得还挺重要，主要讲了一些常见的错误。尤其是指针混用的问题。确实容易出现
+
+看下面代码进行讨论:
+
+```cpp
+void process(shared_ptr<int> ptr)
+{
+// use ptr
+} // ptr goes out of scope and is destroyed
+
+shared_ptr<int> p(new int(42)); // reference count is 1
+process(p); // copying p increments its count; in process the reference count is 2
+int i = *p; // ok: reference count is 1
+
+int *x(new int(1024)); // dangerous: x is a plain pointer, not a smart pointer
+process(x); // error: cannot convert int* to shared_ptr<int> 
+process(shared_ptr<int>(x)); // legal, but the memory will be deleted!
+int j = *x; // undefined: x is a dangling pointer!
+```
+
+**Best practice: shared_ptr和make_shared联合使用。尽量不使用shared_ptr和new的组合**
+
+**Warning: It is dangerous to use a built-in pointer to access an object owned by a smart pointer, because we may not know when that object is destroyed.**
+
+#### ...and Don’t Use get to Initialize or Assign Another Smart Pointer
+
+q:smart pointers提供的get方法的正确用法是什么?
+>This function is intended for cases when we need to pass a built-in pointer to code that can’t use a smart pointer.
+>
+>比如lua capi，如果我们在cpp中用raii封装LuaState，但是此时调用api时都是capi，不支持smart pointers.
+
+**Warning：Although the compiler will not complain, it is an error to bind another smart pointer to the pointer returned by get. 因为这会导致两个独立的smart pointer指向同一块资源，千万注意，是两个独立的smart pointer，这么做不会形成共享语义**
+
+看下面代码
+
+```cpp
+shared_ptr<int> p(new int(42)); // reference count is 1
+int *q = p.get(); // ok: but don't use q in any way that might delete its pointer
+{ // new block
+// undefined: two independent shared_ptrs point to the same memory 
+shared_ptr<int>(q);
+} // block ends, q is destroyed, and the memory to which q points is freed
+int foo = *p; // undefined; the memory to which p points was freed
+```
+
+这里需要注意的是，```shared_ptr<int>(q)```和```shared_ptr<int> p(new int(42))```不是同一个smart pointer，因为前者不是通过后者进行的copy and assign，所以没有reference count的变化。这二者是独立的smart pointer.两个独立的smart pointer
+指向同一块资源，肯定会导致灾难。而这种情况，只有通过warning中禁止的行为才会发生。
+
+#### Other shared_ptr Operations
+
+q:reset会更新reference count嘛?
+>Like assignment, reset updates the reference counts and, if appropriate, deletes the object to which p points
+
+q:reset的正确用法是什么?
+>The reset member is often used together with unique to control changes to the object shared among several shared_ptrs. 
+Before changing the underlying object, we check whether we’re the only user. If not, we make a new copy before making the change
+
+```cpp
+if (!p.unique())
+  p.reset(new string(*p)); // we aren't alone; allocate a new copy
+*p += newVal;
+```
+
+### 12.1.4. Smart Pointers and Exceptions
+
 ### 实践
 
 - demo-01
@@ -122,3 +270,27 @@ q:explicit constructor的优缺点？
 但是我觉得额外工作量不重要，因为也没有太多。但是能避免bug则很重要。
 
 [What does the explicit keyword mean?](https://stackoverflow.com/questions/121162/what-does-the-explicit-keyword-mean)
+
+- demo-03
+
+Exercise12.6，我在进行设计时有如下需要单独考虑的问题
+
+1. 指针在进行传递时，没有必要采用google对于未修改传入参数的const T&建议，原因和std::initializer_list一样。直接采用穿值得方式开销不大，it's cheap.
+2. 对于std::vector<int>在资源申请时，使用new而不是new []。因为所说语义是数组，但是vector<int>确实是一个class type，采用new 和 delete即可
+
+在对比参考答案后，发现这一小节看书的注意事项没有体现在代码上
+
+1. 如果空间分配不足怎么办？
+2. new 和 new std::nothrow的区别是否对比清楚？
+3. dangling pointer怎么处理？
+
+上述的讨论会引起另一个问题
+q:If make_shared/make_unique can throw bad_alloc, why is it not a common practice to have a try catch block for it?
+>参考stackoverflow的答案即可，从答案中也部分说明了，new和make_shared在申请资源失败时碰到的情形一样，
+所以，此时不处理，让其异常core,也未尝不可
+
+[If make_shared/make_unique can throw bad_alloc, why is it not a common practice to have a try catch block for it?](https://stackoverflow.com/questions/57158670/if-make-shared-make-unique-can-throw-bad-alloc-why-is-it-not-a-common-practice)
+
+- demo-04
+
+用shared_ptr进行修复
