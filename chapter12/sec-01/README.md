@@ -153,6 +153,7 @@ shared_ptr<int> p2(new int(1024)); // ok: uses direct initialization
 q:smard pointer是否接收普通指针的隐式转换?
 >No.The smart pointer constructors that take pointers are explicit (§ 7.5.4, p. 296). Hence, we cannot implicitly convert a built-in pointer to a smart pointer
 
+**我们可以发现，using shared_ptr with new 是一种raii的直接体现**
 
 #### Don’t Mix Ordinary Pointers and Smart Pointers ...
 
@@ -218,6 +219,23 @@ if (!p.unique())
   p.reset(new string(*p)); // we aren't alone; allocate a new copy
 *p += newVal;
 ```
+
+#### A shot summary
+
+这一小节其实比较重要，因为阐述了智能指针和原始指针的关系。在一些用法上要特别注意，因为极容易出错。我来简单总结下。
+
+- 接口提供ordinary pointer
+  - dynamic object采用ordinary pointer管理。这一种没什么好说的，原始c的方式。
+  - dynamic object采用smart pointer管理。
+    - 正确的用法是对于CAPI，调用get()方法即可
+    - 但是调用get()方法之后，务必不能根据ordinary pointer再构造一个smart_pointer
+- 接口提供smart pointer
+  - dynamic object采用ordinary pointer管理。Not Recommended!!!
+    - 这种case非常容易出错。
+    - 建议改变接口参数，或者资源管理的方式
+  - dynamic object采用smart pointer。c++建议方式
+
+参考demo-05的实践
 
 ### 12.1.4. Smart Pointers and Exceptions
 
@@ -294,3 +312,11 @@ q:If make_shared/make_unique can throw bad_alloc, why is it not a common practic
 - demo-04
 
 用shared_ptr进行修复
+
+- demo-05
+
+需要关注的几个问题
+1. 多个stack object构造和析构的顺序是什么?
+2. 多个dynamic object构造和析构的顺序是什么?
+3. Derived class在构造和析构时，基类的构造和析构是什么顺序？
+4. shared_ptr/ordinary_ptr在资源管理和接口参数的一些细节问题
