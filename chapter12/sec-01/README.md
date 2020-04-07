@@ -220,7 +220,7 @@ if (!p.unique())
 *p += newVal;
 ```
 
-#### A shot summary
+#### A short summary
 
 这一小节其实比较重要，因为阐述了智能指针和原始指针的关系。在一些用法上要特别注意，因为极容易出错。我来简单总结下。
 
@@ -238,6 +238,95 @@ if (!p.unique())
 参考demo-05的实践
 
 ### 12.1.4. Smart Pointers and Exceptions
+
+这一小节也是比较实用的章节，主要讲了smart pointer(shared_ptr)在管理dynamic memory以外资源的一些用法。os当中除了memory
+还有很多常用资源
+- FILE(FILE or fd)
+- socket/port/connection
+- db(mysql/redis)
+- 其他非Os资源,lua state
+
+q:smart pointers对于异常导致的程序执行流程以外变化而导致的resources leak是否可以避免?
+>if an exception occurs. One easy way to make sure resources are freed is to use smart pointers.
+
+#### Smart Pointers and Dumb Classes
+
+q:dumb classes是指什么?
+>Many C++ classes, including all the library classes, define destructors (§ 12.1.1, p. 452) that take care of cleaning up the resources used by that object.
+>
+>However, not all classes are so well behaved.
+>
+>In particular, classes that are designed to be used by both C and C++ generally require the user to specifically free any resources that are used
+>
+>我自己的理解是，需要自己手动管理资源的类，叫做dumb classes.导致这个类产生的最常见的问题在于，c++对于c的兼容，由于c不支持class机制，所以一些library的实现考虑到了c的场景。此时，需要我们自己来管理这些资源。
+一个显而易见的例子就是在c++当中调用lua时，不可避免的会用到liblua.a，而这个库是用c写成的。所以，对于lua state这种资源，
+我们需要通过raii的方式进行管理。
+>而smart pointer存在的意义在于，他为我们提供了灵活的接口，让我们不必要自己重新实现一个raii class，直接借助smart pointer即可进行资源管理
+
+#### Using Our Own Deletion Code
+
+作者给出了一个例子
+```cpp
+struct destination; // represents what we are connecting to
+struct connection; // information needed to use the connection connection connect(destination*); // open the connection 
+void disconnect(connection); // close the given connection void f(destination &d /* other parameters */)
+{
+// get a connection; must remember to close it when done
+  connection c = connect(&d);
+// use the connection
+
+// if we forget to call disconnect before exiting f, there will be no way to close c
+  disconnect(c)
+}
+```
+对于上述代码，我们面临的问题是，如何管理connection这个资源，使得资源泄露的问题可以避免。
+**显然可以通过raii的手法来进行资源管理**，即需要定义资源管理类。
+
+1. 自己定义一个raii类
+2. 借助现有工具
+
+我们先考虑第一个方法，大致的实现可能如下
+```cpp
+class ConnectionType {
+ public:
+  ConnectionType(destination* p_des) : p_conn(nullptr) {
+    *p_conn = connconnect(p_des)
+  }
+  ~ConnectionType() {disconnect(*p_conn;)}
+  connection* get() const {return p_conn;}
+
+ private:
+  connection* p_conn;
+};
+
+void process(destionation* p_des) {
+  ConnectionType conn(p_des);
+
+  do_something(conn.get())
+}
+```
+
+但是，上面代码没有考虑复用的角度。既然smart pointer给我们提供了工具，那我们应该尝试用smart pointer来解决这个问题
+1. By default, shared_ptrs assume that they point to dynamic memory. 所以，如果我们希望管理connection资源，shared_ptr内部的plain pointer不能指向dynamic memory，而是应该指向connection.
+2. default, when a shared_ptr is destroyed, it executes delete on the pointer it holds. 同理，如果我们希望回收connection资源，我们也需要重新定义deleter函数，来处理内部的plain pointer
+
+```cpp
+void close_connection(connection* p_conn) {disconnect(*p_conn);}
+// disconnect不能作为deleter的原因在于，deleter的参数，必须是T*，因为shared_ptr在实现的时候，回调接口就是这么设计的
+
+connection conn = connect(&des);
+shared_ptr<connection> conn_ptr(&conn, end_connection);
+// conn不能作为shared_ptr的参数原因是，shared_ptr的构造接口参数必须是T*，因为他的内部是通过plain pointer对资源进行管理的
+```
+**Caution: Smart Pointer Pitfalls**
+
+q:使用smart pointer有哪些注意点，能保证我们正确使用？
+>Smart pointers can provide safety and convenience for handling dynamically allocated memory only when they are used properly. To use smart pointers correctly, we must adhere to a set of conventions
+- Don’t use the same built-in pointer value to initialize (or reset) more than one smart pointer
+- Don’t delete the pointer returned from get().
+- Don’t use get() to initialize or reset another smart pointer.
+- If you use a pointer returned by get(), remember that the pointer will become invalid when the last corresponding smart pointer goes away.
+- If you use a smart pointer to manage a resource other than memory allocated by new, remember to pass a deleter
 
 ### 实践
 
@@ -320,3 +409,12 @@ q:If make_shared/make_unique can throw bad_alloc, why is it not a common practic
 2. 多个dynamic object构造和析构的顺序是什么?
 3. Derived class在构造和析构时，基类的构造和析构是什么顺序？
 4. shared_ptr/ordinary_ptr在资源管理和接口参数的一些细节问题
+
+- demo-06
+
+1. 给出了自己管理socket的raii实现
+2. 给出了一个shared_ptr对于socket进行管理
+
+shared_ptr的实现在于没有办法像自己实现的raii类那样，在资源管理对象创建时申请资源，而是得先申请好资源。shared_ptr在进行资源你管理时，要注意
+1. shared_ptr内部是plain pointer，所以需要通过地址关联
+2. deleter接受的参数T*
