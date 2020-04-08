@@ -32,6 +32,29 @@ q:makes_shared的作用是什么?
 >
 >这么理解，如果我们直接管理内存。需要使用new和delete进行资源的申请(分配-初始化)和释放(析构-释放)。但是对于shared_ptr，也是用raii的方式进行管理，make_shared相当于资源申请的工厂方法，raii的核心思路，资源申请的同时进行资源管理对象的初始化。
 
+q:为什么建议使用make_shared来构造shared_ptr而不是直接调用shared_ptr constructors with new?
+>这里面有性能上的考虑
+In a typical implementation, shared_ptr holds only two pointers:
+- the stored pointer (one returned by get());
+- a pointer to control block.
+
+The control block is a dynamically-allocated object that holds:
+- either a pointer to the managed object or the managed object itself;
+- the deleter (type-erased);
+- the allocator (type-erased);
+- the number of shared_ptrs that own the managed object;
+- the number of weak_ptrs that refer to the managed object.
+
+>When shared_ptr is created by calling std::make_shared or std::allocate_shared, the memory for both the control block and the managed object is created with a single allocation.The managed object is constructed in-place in a data member of the control block
+>
+>When shared_ptr is created via one of the shared_ptr constructors, the managed object and the control block must be allocated separately. In this case, the control block stores a pointer to the managed object.
+
+q:make_shared有什么缺点吗?
+>这个问题需要结合weak_ptr来一起看，我在weak_ptr对这个问题进行解决。
+
+参考
+[Difference in make_shared and normal shared_ptr in C++](https://stackoverflow.com/questions/20895648/difference-in-make-shared-and-normal-shared-ptr-in-c)
+
 #### Copying and Assigning shared_ptrs
 
 q:shared_ptr的语义是什么?
@@ -328,6 +351,86 @@ q:使用smart pointer有哪些注意点，能保证我们正确使用？
 - If you use a pointer returned by get(), remember that the pointer will become invalid when the last corresponding smart pointer goes away.
 - If you use a smart pointer to manage a resource other than memory allocated by new, remember to pass a deleter
 
+### 12.1.5 unique_ptr
+
+#### basic
+q:unique_ptr的语义是什么?和shared_ptr的语义有什么区别?
+>std::unique_ptr is a smart pointer type introduced in C++11, which expresses exclusive ownership of a dynamically allocated object.
+It cannot be copied, but can be moved to represent ownership transfer.
+>
+> std::shared_ptr is a smart pointer type that expresses shared ownership of a dynamically allocated object.
+
+参考
+[Google C++ Style Guide](https://google.github.io/styleguide/cppguide.html#Ownership_and_Smart_Pointers)
+[聊聊 C++ 的优雅写法](https://bot-man-jl.github.io/articles/?post=2020/Conventional-Cpp#smart-pointers-ownership)
+
+q:unique_ptr如何进行构造?
+>Unlike shared_ptr, there is no library function comparable to make_shared that returns a unique_ptr. Instead, when we define a unique_ptr, we bind it to a pointer returned by new.
+
+q:release是否析构对象?
+>Calling release breaks the connection between a unique_ptr and the object it had been managing.
+>Often the pointer returned by release is used to initialize or assign another smart pointer. In that case, responsibility for managing the memory is simply transferred from one smart pointer to another. However, if we do not use another smart pointer to hold the pointer returned from release, our program takes over responsibility for freeing that resource:
+
+#### Passing and Returning unique_ptrs
+
+q:有什么特例可以让我们进行copy or assign a unique_ptr?
+>There is one exception to the rule that we cannot copy a unique_ptr: We can copy or assign a unique_ptr that is about to be destroyed.The most common example is when we return a unique_ptr from a function
+
+#### Passing a Deleter to unique_ptr
+
+q:unique_ptr在passing a deleter时有什么特别之处?
+>we must supply the deleter type inside the angle brackets along with the type to which the unique_ptr can point.We supply a callable object of the specified type when we create or reset an object of this type
+
+看书上的demo，我来解释下参数类型
+- decltype(end_function)，给出end_function的类型
+- 但是，第二个参数这里填的是一个callable object的类型，对于c当中的callable object，其实就一种。function pointer type
+- 注意，function pointer type不是function type，这里要做下严格区别，起码decltype不会从end_connection推导出void (*)(connection*)这样的类型
+
+```cpp
+void f(destination &d /* other needed parameters */)
+{
+connection c = connect(&d); // open the connection // when p is destroyed, the connection will be closed
+unique_ptr<connection, decltype(end_connection)*> p(&c, end_connection);
+// use the connection
+// when f exits, even if by an exception, the connection will be properly closed }
+```
+
+### 12.1.6 weak_ptr
+
+#### basic
+
+首先，我们先来回答一个之前的问题
+q:make_shared有什么缺点吗?
+>我们先复习shared_ptr的实现细节
+In a typical implementation, shared_ptr holds only two pointers:
+- the stored pointer (one returned by get());
+- a pointer to control block.
+The control block is a dynamically-allocated object that holds:
+- either a pointer to the managed object or the managed object itself;
+- the deleter (type-erased);
+- the allocator (type-erased);
+- the number of shared_ptrs that own the managed object;
+- the number of weak_ptrs that refer to the managed object.
+
+需要特别说明的是，the stored pointer和a pointer to control block不一定是相等的。
+
+我们需要进一步关注的是，shared_ptr的析构行为是怎样的?
+>The destructor of shared_ptr decrements the number of shared owners of the control block. If that counter reaches zero, the control block calls the destructor of the managed object. The control block does not deallocate itself until the std::weak_ptr counter reaches zero as well.
+>
+>从control block的成员来看，the number of shared_ptr和the number of weak_ptr不是同一个成员，这也就说明了
+不同的行为，会更新不同的变量。比如，shared_ptr之间的copy,assign一般会增加the number of shared_ptr(当然也有可能增加
+the number of weak_ptr)，但是，weak_ptr通过shared_ptr进行初始化，或者weak_ptr之间的copy,assign并不会增加the number of shared_ptr，而是增加the number of weak_ptr.
+所以，这也到control block存在两次析构，一次是当shared_ptr的最后一个对象析构，那么control block会析构the managed object，但是不会析构control block。只有当weak_ptr的最后一个对象析构时，control block才会析构。
+>
+>这会出现一种合理的情形是，如果一个weak_ptr所指向的shared_ptr都析构了，但是weak_ptr还未析构的情形。
+此时，如果我们采用make_shared进行构造，由于后者采用only one allocation，所以即使the managed object可以析构，
+但是也不能析构，需要等待weak_ptr引用计数为0，control block进行析构，才能一起析构。
+显然，如果采用shared_ptr(constructor)则不会出现这种case.
+
+参考
+[Difference in make_shared and normal shared_ptr in C++](https://stackoverflow.com/questions/20895648/difference-in-make-shared-and-normal-shared-ptr-in-c)
+
+
 ### 实践
 
 - demo-01
@@ -418,3 +521,9 @@ q:If make_shared/make_unique can throw bad_alloc, why is it not a common practic
 shared_ptr的实现在于没有办法像自己实现的raii类那样，在资源管理对象创建时申请资源，而是得先申请好资源。shared_ptr在进行资源你管理时，要注意
 1. shared_ptr内部是plain pointer，所以需要通过地址关联
 2. deleter接受的参数T*
+
+- demo-07
+
+在demo-06的基础上，实现了unique_ptr的版本，需要特别注意的是
+1. unique_ptr<objT, delT> p (new objT, fcn)
+2. 如果callable object是function的形式，需要单独传递一个*表明是function pointer type. decltype只返回function type.
