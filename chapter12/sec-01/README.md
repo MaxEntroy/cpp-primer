@@ -430,6 +430,17 @@ the number of weak_ptr)，但是，weak_ptr通过shared_ptr进行初始化，或
 参考
 [Difference in make_shared and normal shared_ptr in C++](https://stackoverflow.com/questions/20895648/difference-in-make-shared-and-normal-shared-ptr-in-c)
 
+q:weak_ptr的语义是什么?
+>std::unique_ptr is a smart pointer type introduced in C++11, which expresses exclusive ownership of a dynamically allocated object.
+std::shared_ptr is a smart pointer type that expresses shared ownership of a dynamically allocated object.
+weak_ptr captures the idea that a weak_ptr shares its object “weakly.
+>
+>我们来看一些weak_ptr的细节：
+- A weak_ptr (Table 12.5) is a smart pointer that does not control the lifetime of the object to which it points.
+- a weak_ptr points to an object that is managed by a shared_ptr
+- Binding a weak_ptr to a shared_ptr does not change the reference count of that shared_ptr
+- Once the last shared_ptr pointing to the object goes away, the object itself will be deleted. That object will be deleted even if there are weak_ptrs pointing to it
+>通过我们上文对shared_ptr内部结构的分析，我们知道，当shared_ptr的rc为0是，管理的对象会被析构，但是control block不一定会被析构。只有当weak_ptr的rc为0时，control block才会被析构
 
 ### 实践
 
