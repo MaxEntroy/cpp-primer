@@ -455,18 +455,18 @@ q:weak_ptr使用时，需要注意什么?
 这是非常重要的一小节，其实我在上面讲述make_shared存在的缺点时，已经介绍了shared_ptr的析构过程。但是，由于这一小节非常重要，所以我们再次进行讨论。因为有很多需要特别在意的地方。
 
 1. 务必区分smart_ptr的析构，和managed object的析构，这两个不是一回事，不要搞混了。否则shared_ptr形成cycle reference时不能造成彼此析构逇解释，很容易说成和死锁一样，不是这么一回事，真正的原因是，smart pointer已经析构了，但是managed object没有析构。
-2. shared_ptr的析构过程是怎样的？这个一定要结合shared_ptr的结构来说，由于shared_ptr是共享了managed object，所以一个shared_ptr的析构，不可能简单的对于managed object进行析构。
-2.1. The destructor of shared_ptr decrements the number of shared owners of the control block. If that counter reaches zero, the control block calls the destructor of the managed object. The control block does not deallocate itself until the std::weak_ptr counter reaches zero as well
-2.2. In a typical implementation, shared_ptr holds only two pointers:
-2.2.1. the stored pointer (one returned by get());
-2.2.2. a pointer to control block.
-2.3. The control block is a dynamically-allocated object that holds:
-2.3.1. either a pointer to the managed object or the managed object itself;
-2.3.2. the deleter (type-erased);
-2.3.3. the allocator (type-erased);
-2.3.4. the number of shared_ptrs that own the managed object;
-2.3.5. the number of weak_ptrs that refer to the managed object.
-2.4. 具体到weak_ptr的析构，由于weak_ptr的构造，并不增加shared_ptr's rc，只是增加weak_ptr's rc，所以，析构的时候反之亦成。只是减少weak_ptr's rc，如果rc==0，那么此时会析构control block对象。
+2. shared_ptr的析构过程是怎样的？这个一定要结合shared_ptr的结构来说，由于shared_ptr是共享了managed object，所以一个shared_ptr的析构，不可能简单的对于managed object进行析构。<br>
+2.1. The destructor of shared_ptr decrements the number of shared owners of the control block. If that counter reaches zero, the control block calls the destructor of the managed object. The control block does not deallocate itself until the std::weak_ptr counter reaches zero as well<br>
+2.2. In a typical implementation, shared_ptr holds only two pointers:<br>
+2.2.1. the stored pointer (one returned by get());<br>
+2.2.2. a pointer to control block.<br>
+2.3. The control block is a dynamically-allocated object that holds:<br>
+2.3.1. either a pointer to the managed object or the managed object itself;<br>
+2.3.2. the deleter (type-erased);<br>
+2.3.3. the allocator (type-erased);<br>
+2.3.4. the number of shared_ptrs that own the managed object;<br>
+2.3.5. the number of weak_ptrs that refer to the managed object.<br>
+2.4. 具体到weak_ptr的析构，由于weak_ptr的构造，并不增加shared_ptr's rc，只是增加weak_ptr's rc，所以，析构的时候反之亦成。只是减少weak_ptr's rc，如果rc==0，那么此时会析构control block对象。<br>
 3. In existing implementations, the number of weak pointers is incremented ([1], [2]) if there is a shared pointer to the same control block. 这句话也非常重要，shared_ptr进行copy,assign时，除了增加the number of shared_ptrs，也增加nunmber weak_ptrs.同理，shared_ptr进行析构时，也是同时更新两个rc。但是,weak_ptr在进行copy,assing和析构时，只更新the number of weak_ptrs
 
 
@@ -669,6 +669,25 @@ A const member function that returns *this as a reference should have a return t
 >
 >对于第二个问题，则不是，非常对象，可以用非常引用也可以用常引用接受。
 
+**注意，上面的理解有不足的地方**看下面的代码
+
+```cpp
+// ...
+std::string& front();
+std::string& front() const;
+// ...
+```
+
+q: 上面的代码都可以编译通过，并正常运行。这显得非常奇怪在于，为什么一个非常引用可以绑定到常量？
+>显然是不行的。
+我们都知道const member function本质上修饰this参数，const classtype* this
+这里需要注意的是，this并不是常量，常量是*this，即对象本身是常量，那么自然的对象当中的成员也都是常量。
+但是，问题在于，如果一个对象内部有指针，那么此时的指针是一个常量，而不是指针指向的成员是常量。
+所以，data_是一个std::shared_ptr，他是一个常指针，但是它指向的对象(vector)并不是常量，所以返回这个非常量的首元素，自然不需要一个常引用。
+
+参考<br>
+[Returning non-const reference from a const member function](https://stackoverflow.com/questions/5055427/returning-non-const-reference-from-a-const-member-function)
+
 q:In our check function we didn’t check whether i was greater than zero. Why is it okay to omit that check?
 >这一道题非常赞，可以思考。
 其实合理的范围是[0, size)，但是确实没有判断负数。因为这里采用了无符号数的形式，只要传递进来负数。
@@ -728,3 +747,7 @@ shared_ptr的实现在于没有办法像自己实现的raii类那样，在资源
 在demo-06的基础上，实现了unique_ptr的版本，需要特别注意的是
 1. unique_ptr<objT, delT> p (new objT, fcn)
 2. 如果callable object是function的形式，需要单独传递一个*表明是function pointer type. decltype只返回function type.
+
+- demo-08
+
+讲了一个shared_ptr导致的cycle reference，从而通过weak_ptr进行解决
