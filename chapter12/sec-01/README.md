@@ -400,6 +400,7 @@ unique_ptr<connection, decltype(end_connection)*> p(&c, end_connection);
 #### basic
 
 首先，我们先来回答一个之前的问题
+
 q:make_shared有什么缺点吗?
 >我们先复习shared_ptr的实现细节
 In a typical implementation, shared_ptr holds only two pointers:
@@ -429,6 +430,7 @@ the number of weak_ptr)，但是，weak_ptr通过shared_ptr进行初始化，或
 
 参考
 [Difference in make_shared and normal shared_ptr in C++](https://stackoverflow.com/questions/20895648/difference-in-make-shared-and-normal-shared-ptr-in-c)
+[std::shared_ptr](https://en.cppreference.com/w/cpp/memory/shared_ptr)
 
 q:weak_ptr的语义是什么?
 >std::unique_ptr is a smart pointer type introduced in C++11, which expresses exclusive ownership of a dynamically allocated object.
@@ -441,6 +443,194 @@ weak_ptr captures the idea that a weak_ptr shares its object “weakly.
 - Binding a weak_ptr to a shared_ptr does not change the reference count of that shared_ptr
 - Once the last shared_ptr pointing to the object goes away, the object itself will be deleted. That object will be deleted even if there are weak_ptrs pointing to it
 >通过我们上文对shared_ptr内部结构的分析，我们知道，当shared_ptr的rc为0是，管理的对象会被析构，但是control block不一定会被析构。只有当weak_ptr的rc为0时，control block才会被析构
+
+1. 这上面总结的第一点其实非常重要，当shared_ptr形成cycle references时，至于哪一个shared_ptr该采用weak_ptr则完全根据第一点来判断。
+2. 第二点告诉我们，weak_ptr的初始化必须通过shared_ptr来进行。
+
+q:weak_ptr使用时，需要注意什么?
+>Because the object might no longer exist, we cannot use a weak_ptr to access its object directly.To access that object, we must call lock.
+
+#### destructor of shared_ptr and weak_ptr
+
+这是非常重要的一小节，其实我在上面讲述make_shared存在的缺点时，已经介绍了shared_ptr的析构过程。但是，由于这一小节非常重要，所以我们再次进行讨论。因为有很多需要特别在意的地方。
+
+1. 务必区分smart_ptr的析构，和managed object的析构，这两个不是一回事，不要搞混了。否则shared_ptr形成cycle reference时不能造成彼此析构逇解释，很容易说成和死锁一样，不是这么一回事，真正的原因是，smart pointer已经析构了，但是managed object没有析构。
+2. shared_ptr的析构过程是怎样的？这个一定要结合shared_ptr的结构来说，由于shared_ptr是共享了managed object，所以一个shared_ptr的析构，不可能简单的对于managed object进行析构。
+2.1. The destructor of shared_ptr decrements the number of shared owners of the control block. If that counter reaches zero, the control block calls the destructor of the managed object. The control block does not deallocate itself until the std::weak_ptr counter reaches zero as well
+2.2. In a typical implementation, shared_ptr holds only two pointers:
+2.2.1. the stored pointer (one returned by get());
+2.2.2. a pointer to control block.
+2.3. The control block is a dynamically-allocated object that holds:
+2.3.1. either a pointer to the managed object or the managed object itself;
+2.3.2. the deleter (type-erased);
+2.3.3. the allocator (type-erased);
+2.3.4. the number of shared_ptrs that own the managed object;
+2.3.5. the number of weak_ptrs that refer to the managed object.
+2.4. 具体到weak_ptr的析构，由于weak_ptr的构造，并不增加shared_ptr's rc，只是增加weak_ptr's rc，所以，析构的时候反之亦成。只是减少weak_ptr's rc，如果rc==0，那么此时会析构control block对象。
+3. In existing implementations, the number of weak pointers is incremented ([1], [2]) if there is a shared pointer to the same control block. 这句话也非常重要，shared_ptr进行copy,assign时，除了增加the number of shared_ptrs，也增加nunmber weak_ptrs.同理，shared_ptr进行析构时，也是同时更新两个rc。但是,weak_ptr在进行copy,assing和析构时，只更新the number of weak_ptrs
+
+
+下面我们来分析一个具体的例子
+
+```cpp
+// a.h
+#ifndef A_H_
+#define A_H_
+
+#include <iostream>
+#include <memory>
+
+#include "b.h"
+
+namespace cp {
+
+class A {
+ public:
+  A() {std::cout << "A() called.\n";}
+  ~A() {std::cout << "~A() called.\n";}
+
+  void SetBptr(std::shared_ptr<B> ptr) { b_ptr = ptr;}
+
+ private:
+  std::shared_ptr<B> b_ptr;
+};
+
+} // namespace cp
+
+#endif // A_H_
+
+// b.h
+#ifndef B_H_
+#define B_H_
+
+#include <iostream>
+#include <memory>
+
+namespace cp {
+
+class A;
+
+class B {
+ public:
+  B() {std::cout << "B() called.\n";}
+  ~B() {std::cout << "~B() called.\n";}
+
+  void SetAptr(std::shared_ptr<A> ptr) {a_ptr = ptr;}
+
+ private:
+  std::shared_ptr<A> a_ptr;
+};
+
+} // namespace cp
+
+#endif // B_H_
+
+// main.cc
+#include "a.h"
+
+using namespace cp;
+
+int main (void) {
+  std::shared_ptr<A> a_ptr = std::make_shared<A>();
+  std::shared_ptr<B> b_ptr = std::make_shared<B>();
+
+  a_ptr->SetBptr(b_ptr);
+  b_ptr->SetAptr(a_ptr);
+
+  return 0;
+}
+
+/*
+A() called.
+B() called.
+*/
+```
+
+代码逻辑非常简单，典型的shared_ptr cycle reference，导致manage object没有析构。我们具体分析下过程
+1. b_ptr先进行析构，(注意，b_ptr是一个smart pointer，不是managed object)，rc--(rc==1，此时还不到析构managed object的时候，即rc!=0)，所以class B没有析构，但是b_ptr已经析构了。
+2. a_ptr再进行析构，(注意，由于class B没有析构，所以a_ptr的rc是2)，rc--(rc==1，同上)
+
+下面我们用weak_ptr进行改造
+```cpp
+// a.h
+#ifndef A_H_
+#define A_H_
+
+#include <iostream>
+#include <memory>
+
+#include "b.h"
+
+namespace cp {
+
+class A {
+ public:
+  A() {std::cout << "A() called.\n";}
+  ~A() {std::cout << "~A() called.\n";}
+
+  void SetBptr(std::shared_ptr<B> ptr) { b_ptr = ptr;}
+
+ private:
+  std::shared_ptr<B> b_ptr;
+};
+
+} // namespace cp
+
+#endif // A_H_
+
+// b.h
+#ifndef B_H_
+#define B_H_
+
+#include <iostream>
+#include <memory>
+
+namespace cp {
+
+class A;
+
+class B {
+ public:
+  B() {std::cout << "B() called.\n";}
+  ~B() {std::cout << "~B() called.\n";}
+
+  void SetAptr(std::shared_ptr<A> ptr) {a_ptr = ptr;}
+
+ private:
+  std::weak_ptr<A> a_ptr;
+};
+
+} // namespace cp
+
+#endif // B_H_
+
+// main.cc
+#include "a.h"
+
+using namespace cp;
+
+int main (void) {
+  std::shared_ptr<A> a_ptr = std::make_shared<A>();
+  std::shared_ptr<B> b_ptr = std::make_shared<B>();
+
+  a_ptr->SetBptr(b_ptr);
+  b_ptr->SetAptr(a_ptr);
+
+  return 0;
+}
+
+/*
+A() called.
+B() called.
+~A() called.
+~B() called.
+*/
+```
+下面我们来分析下，上面这段代码和它的输出
+1. 为什么class B内部采用weak_ptr而不是class A，这个是有原因的，要根据我们上面总结的第一点进行判断，但是这个demo完全是为了说明问题，所以语义平等，都行。
+2. 最后析构的顺序，和一般的stack object first in last out顺序不一致。
+3. 先析构b_ptr(此时shared_rc==2, weak_rc == 2)，析构shared_rc--, weak_rc--(shared_rc==1, weak_rc==1)，不对manage object进行析构。
+4. 再析构a_ptr(shared_rc==1, weak_rc==2)，shared_rc--(shared_rc==0，weak_rc==1此时会触发对于manage object的析构，即进行class A的析构，调用A的析构函数。所以先输~A() called.由于class A内部包含std::shared_ptr<B>，此时对于该smart pointer再次进行析构，该smart pointer object，shared_rc--，weak_rc--(shared_rc==0, weak_rc==0)触发对于class B的析构，调用B的析构函数，输出~B() called. 并且由于b_ptr的weak_rc==0，所以b_ptr的control block也会发生析构。由于B内部包含weak_ptr<A>，此时weak_rc--,weak_rc==0, ptr_a的control black进行析构)
 
 ### 实践
 
