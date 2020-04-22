@@ -466,7 +466,7 @@ q:weak_ptr使用时，需要注意什么?
 2.3.3. the allocator (type-erased);<br>
 2.3.4. the number of shared_ptrs that own the managed object;<br>
 2.3.5. the number of weak_ptrs that refer to the managed object.<br>
-2.4. 具体到weak_ptr的析构，由于weak_ptr的构造，并不增加shared_ptr's rc，只是增加weak_ptr's rc，所以，析构的时候反之亦成。只是减少weak_ptr's rc，如果rc==0，那么此时会析构control block对象。<br>
+2.4. 具体到weak_ptr的析构，由于weak_ptr的构造，并不增加shared_ptr's rc，只是增加weak_ptr's rc，所以，析构的时候反之亦成。只是减少weak_ptr's rc，如果rc==0，那么此时会析构control block对象。<>
 3. In existing implementations, the number of weak pointers is incremented ([1], [2]) if there is a shared pointer to the same control block. 这句话也非常重要，shared_ptr进行copy,assign时，除了增加the number of shared_ptrs，也增加nunmber weak_ptrs.同理，shared_ptr进行析构时，也是同时更新两个rc。但是,weak_ptr在进行copy,assing和析构时，只更新the number of weak_ptrs
 
 
@@ -751,3 +751,10 @@ shared_ptr的实现在于没有办法像自己实现的raii类那样，在资源
 - demo-08
 
 讲了一个shared_ptr导致的cycle reference，从而通过weak_ptr进行解决
+
+- demo-09
+
+这个是书上的例子，考虑到StrBlob作为强引用，提供了一种弱引用的实现。
+我猜想作者的这个例子，本质还是为了模仿weak_ptr提供的一些功能，所以，在这个类中，提供的方法也只是对于元素基本的一个的访问.
+
+顺便解决了private函数，通过宏进行测试的方法，比FRIEND_TEST简单一些，代码侵入相对少。
