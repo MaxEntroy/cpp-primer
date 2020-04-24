@@ -7,7 +7,6 @@
 
 namespace cp {
 
-
 std::set<std::string> unique_split(const std::string& line);
 
 std::vector<std::string> split(const std::string& line);
