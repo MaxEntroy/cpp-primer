@@ -1,6 +1,10 @@
 #ifndef TEXT_QUERY_IMPL_H_
 #define TEXT_QUERY_IMPL_H_
 
+#ifdef PTEST
+#define private public
+#endif
+
 #include <string>
 #include <unordered_map>
 #include <vector>

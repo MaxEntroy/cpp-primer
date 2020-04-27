@@ -1,6 +1,10 @@
 #ifndef TEXT_QUERY_H_
 #define TEXT_QUERY_H_
 
+#ifdef PTEST
+#define private public
+#endif
+
 #include <memory>
 #include <string>
 

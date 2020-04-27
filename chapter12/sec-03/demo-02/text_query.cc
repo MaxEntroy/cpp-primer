@@ -12,7 +12,6 @@ TextQuery::TextQuery(const std::string& path) : file_path_(path), pimpl_(new Tex
 TextQuery::~TextQuery() = default;
 
 bool TextQuery::Init() {
-  std::string line;
   std::ifstream fin(file_path_.c_str());
   if(!fin.is_open()) {
     std::cerr << "Unable to open file!" << std::endl;
@@ -20,6 +19,7 @@ bool TextQuery::Init() {
   }
 
   int line_num = 1;
+  std::string line;
   while(std::getline(fin, line)) {
     pimpl_->ProcessLine(line, line_num);
     ++line_num;

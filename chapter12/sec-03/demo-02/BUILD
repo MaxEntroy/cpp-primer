@@ -1,3 +1,15 @@
+cc_binary(
+  name = "main",
+  srcs = [
+    "main.cc"
+  ],
+  deps = [
+    ":text_query",
+    "#gflags",
+    "#pthread"
+  ]
+)
+
 cc_library(
   name = "text_query",
   srcs = [
@@ -24,5 +36,31 @@ cc_test(
   ],
   deps = [
     ":string_util"
+  ]
+)
+
+cc_test(
+  name = "text_query_impl_test",
+  srcs = [
+    "text_query_impl_test.cc"
+  ],
+  deps = [
+    ":text_query"
+  ],
+  defs = [
+    "PTEST"
+  ]
+)
+
+cc_test(
+  name = "text_query_test",
+  srcs = [
+    "text_query_test.cc"
+  ],
+  deps = [
+    ":text_query"
+  ],
+  defs = [
+    "PTEST"
   ]
 )
