@@ -285,6 +285,96 @@ q:default的使用限制?
 >We can use = default only on member functions that have a synthesized version
 只有编译器会帮助生成的成员函数，才能使用。
 
+
+### 13.1.6. Preventing Copies
+
+#### Defining a Function as Deleted
+
+q:什么是deleted function?
+>A deleted function is one that is declared but may not be used in any other way
+>
+>Any use of a deleted function is ill-formed (the program will not compile).这个是cpp rerefence的定义
+>
+>从这两个声明中我们可以看出来一个东西就是，只要一个函数被声明了deleted，任何对于它的调用(any use)都会失败。
+可以考虑我们以前通过disallow_copy这样的宏来禁止赋值，但是友元或者其他成员任何可以访问，并不是(any use)这个意义
+
+q: =default vs =delete?
+1. Unlike = default, = delete must appear on the first declaration of a deleted function.
+2. Also unlike = default, we can specify = delete on any function
+
+>再分别说下这两点：
+第一点，对于=default，这个可以在定义的时候使用，本质是告诉编译器生成默认的代码。
+第二点，default只能用于那些编译器会帮助和你合成的函数身上，自然不适用于所有函数
+
+#### The Destructor Should Not be a Deleted Member
+
+q:destructor = delete的语义是什么?
+>不能生成栈对象。
+
+1. If the destructor is deleted, then there is no way to destroy objects of that type.
+2. Moreover, we cannot define variables or temporaries of a class that has a member
+whose type has a deleted destructor.
+3. Although we cannot define variables or members of such types, we can dynamically
+allocate objects with a deleted destructor,However, we cannot free them:
+
+#### The Copy-Control Members May Be Synthesized as Deleted
+
+这一小节细节比较多，本质上还是要想清楚。
+
+For some classes, the compiler defines these synthesized members as deleted functions:
+- The synthesized destructor is defined as deleted 
+  - if the class has a member whose own destructor is deleted 
+  - or is inaccessible (e.g., private).
+- The synthesized copy constructor is defined as deleted 
+  - if the class has a member whose own copy constructor is deleted 
+  - or inaccessible.
+  - It is also deleted if the class has a member with a deleted or inaccessible destructor.
+- The synthesized copy-assignment operator is defined as deleted 
+  - if a member has a deleted or inaccessible copy-assignment operator, 
+  - or if the class has a const or reference member.
+- The synthesized default constructor is defined as deleted
+  - if the class has a member with a deleted or inaccessible destructor;
+  - or has a reference member that does not have an in-class initializer
+  - or has a const member whose type does not explicitly define a default constructor and that
+member does not have an in-class initializer.
+
+conclusion:
+**In essence, these rules mean that if a class has a data member that cannot be default
+constructed, copied, assigned, or destroyed, then the corresponding member will be a
+deleted function.**
+
+
+参考<br>
+[Why synthesized copy-assignment operator is defined as deleted if the class has a reference member?](https://stackoverflow.com/questions/48635366/why-synthesized-copy-assignment-operator-is-defined-as-deleted-if-the-class-has)<br>
+[Can we reassign the reference in C++?](https://stackoverflow.com/questions/9293674/can-we-reassign-the-reference-in-c)
+[Deleted_functions](https://en.cppreference.com/w/cpp/language/function#Deleted_functions)
+
+#### private Copy Control
+
+```cpp
+class PrivateCopy {
+// no access specifier; following members are private by default; see § 7.2 (p.
+268)
+// copy control is private and so is inaccessible to ordinary user code
+PrivateCopy(const PrivateCopy&);
+PrivateCopy &operator=(const PrivateCopy&);
+// other members
+public:
+ PrivateCopy() = default; // use the synthesized default constructor
+ ~PrivateCopy(); // users can define objects of this type but not copy them
+};
+```
+
+在没有delete以前，上面的做法也是可行的。
+1. User code that tries to make a copy will be flagged as an error at compile time; 
+2. copies made in member functions or friends will result in an error at link time.
+
+解释一下，第一点想说，普通的对象不能发生拷贝，compile time的compilation阶段报错。但是，友元和member可以访问private成员。
+所以，第二点是说，如果friend和member访问，那么在compile time的linking阶段在会找不到定义，一样会报错。(当然，如果你定义了函数体就不会报错，这种方式也失效，但是没必要这么做)
+
+conclusion:
+**private copy control的作用也是禁止对象的copy semantics**
+
 ### 实践
 
 - demo-01
