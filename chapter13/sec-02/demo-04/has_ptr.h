@@ -1,6 +1,7 @@
 #ifndef HAS_PTR_H_
 #define HAS_PTR_H_
 
+#include <mutex>
 #include <string>
 
 namespace cp {
@@ -9,12 +10,14 @@ class StrData {
  public:
   explicit StrData(const std::string& s) : ref(1), data(s) {}
 
-  void IncrRef() {++ref;}
-  void DecrRef() {--ref;}
+  void IncrRef();
+  void DecrRef();
+  int GetRef() const {return ref;}
 
  private:
   int ref;
   std::string data;
+  static std::mutex mtx;
 };
 
 class HasPtr {
