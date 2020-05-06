@@ -69,9 +69,43 @@ string null_book = "9-999-99999-9"; // copy initialization
 string nines = string(100, '9'); // copy initialization
 ```
 
+q:direct initialization是否一定不用copy constructor?
+>不是。从第二行代码我们可以看出来，此时是direct initialization，但是调用的是copy constructor
+
 q:copy initialization是否只能使用copy constructor进行?
 >No.copy initialization requires either the
 copy constructor or the move constructor.
+
+q:direct initialization和copy initialization都能调用copy constructor，那么他们根本的区别是什么?
+>其实cpp-primer说的很清楚了，只是背后隐含的意思没有挖掘：
+1.direct initialization: direct initialization has all constructors available to call, and in addition can do any implicit conversion it needs to match up argument types
+2.copy initialization: copy initialization can just set up one implicit conversion sequence
+
+**As you see, copy initialization is in some way a part of direct initialization with regard to possible implicit conversions**
+
+我自己总结下：
+1. direction initialization非常强大，所有构造函数都可以调用(include copy constructor),再此基础上还可以调用各种conversion
+2. copy initialization只能调用copy constructor and move constructor，其余的部分调用conversion
+
+```cpp
+class Foo {
+ public:
+  Foo(int x) : val(x) {}
+  Foo(const Foo& rhs) : val(rhs.val) {}
+ private:
+  int val;
+};
+
+Foo a(3);  // direct initialization: 直接调用匹配的constructor进行构造
+Foo b = 3; // copy initialization: 3不是class Foo类型的对象，所以进行implicit conversion
+Foo c(b);  // direct initialization: 直接调用匹配的constructor进行构造，虽然这是一个copy constructor.
+
+// 对比b和a的构造，我们发现单参数的构造函数是存在的，但是对于copy initialization不能调用重载的构造函数，只能调用copy constructor/move constructor
+// 所以对比direct initialization，多了一次开销
+```
+
+参考<br>
+[Is there a difference between copy initialization and direct initialization?](https://stackoverflow.com/questions/1051379/is-there-a-difference-between-copy-initialization-and-direct-initialization)
 
 q:when copy initialization happens?
 1. when we define variables using an =(注意，这里强调了是define)

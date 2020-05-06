@@ -68,6 +68,10 @@ safe to destroy the existing members of the left-hand operand. Once the lefthand
 operand is destroyed, copy the data from the temporary into the
 members of the left-hand operand.
 
+上述的建议，可以避免下面两个问题：
+1. it automatically handles self assignment
+2. it is automatically exception safe.(The only code that might throw is the new expression inside the copy constructor.If an exception occurs, it will happen before we have changed the left-hand operand)
+
 下面我们看一段错误代码：
 ```cpp
 // WRONG way to write an assignment operator!
