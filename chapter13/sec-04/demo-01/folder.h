@@ -11,6 +11,7 @@ class Folder {
  public:
   void AddMsg(Message*);
   void RemoveMsg(Message*);
+
  private:
   std::list<Message*> pmsg_list_;
 
