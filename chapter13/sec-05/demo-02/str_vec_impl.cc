@@ -13,7 +13,7 @@ void StrVecImpl::create(int sz) {
 void StrVecImpl::create(ConstIter b, ConstIter e) {
   alloc_mem(e - b);
 
-  std::uninitialized_copy(b, e, first_);
+  std::uninitialized_copy(b, e, first());
 }
 
 void StrVecImpl::uncreate() {

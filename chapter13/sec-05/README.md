@@ -28,5 +28,9 @@
 
 尝试优化以下几个点：
 1. pimpl-idiom
-2. move semantics
-3. copy semantics
+2. copy semantics
+2.1. copy constructor/copy assignment正确顺序
+2.2. move operations
+
+具体的实现的时候，发现
+1. pimpl-idiom的实现，明显难度加大，对于指针布局的理解需要更深入的理解。但是，不管理解是否深入，需要做到的就是语义清晰. incr_last()这个操作理解要准确
