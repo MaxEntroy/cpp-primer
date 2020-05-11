@@ -50,8 +50,7 @@ void StrVec::push_back(const std::string& val) {
     pimpl_->realloc_mem();
   }
 
-  pimpl_->construct(end(), val);
-  pimpl_->incr_last();
+  pimpl_->construct_last(val);
 }
 
 } // namespace cp

@@ -24,14 +24,6 @@ void StrVecImpl::uncreate() {
   alloc_.deallocate(first_, end_ - first_);
 }
 
-void StrVecImpl::alloc_mem(int sz) {
-  int cap = sz?2*sz:1;
-
-  first_ = alloc_.allocate(cap);
-  last_ = first_ + sz;
-  end_ = first_ + cap;
-}
-
 void StrVecImpl::realloc_mem() {
   int cap = end_ - first_;
   int new_cap = cap * 2;
@@ -44,6 +36,14 @@ void StrVecImpl::realloc_mem() {
   first_ = new_first;
   last_ = first_ + cap;
   end_ = first_ + new_cap;
+}
+
+void StrVecImpl::alloc_mem(int sz) {
+  int cap = sz?2*sz:1;
+
+  first_ = alloc_.allocate(cap);
+  last_ = first_ + sz;
+  end_ = first_ + cap;
 }
 
 } // namespace cp

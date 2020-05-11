@@ -22,14 +22,15 @@ class StrVecImpl {
   void uncreate();
 
   bool is_enough_room() const { return last_ != end_; }
-  void alloc_mem(int sz);
   void realloc_mem();
-  void construct(Iter it, const std::string& val) { alloc_.construct(it, val); }
+  void construct_last(const std::string& val) { alloc_.construct(last_++, val); }
 
   Iter first() const { return first_; }
   Iter last() const { return last_; }
   Iter end() const { return end_; }
-  void incr_last() { ++last_; }
+
+ private:
+  void alloc_mem(int sz);
 
  private:
   std::allocator<std::string> alloc_;
