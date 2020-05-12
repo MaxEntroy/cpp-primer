@@ -1,21 +1,21 @@
-#include "str_vec.h"
 #include "str_vec_impl.h"
+#include "str_vec.h"
 
 namespace cp {
 
-inline StrVec::StrVec(int sz) {
+StrVec::StrVec(int sz) {
   pimpl_->create(sz);
 }
 
-inline StrVec::StrVec(std::initializer_list<std::string> il) {
+StrVec::StrVec(std::initializer_list<std::string> il) {
   pimpl_->create(il.begin(), il.end());
 }
 
-inline StrVec::~StrVec() {
+StrVec::~StrVec() {
   pimpl_->uncreate();
 }
 
-inline StrVec::StrVec(const StrVec& rhs) {
+StrVec::StrVec(const StrVec& rhs) {
   pimpl_->create(rhs.begin(), rhs.end());
 }
 
@@ -29,19 +29,19 @@ StrVec& StrVec::operator=(const StrVec& rhs) {
   return *this;
 }
 
-inline StrVec::Iter StrVec::begin() const {
+StrVec::Iter StrVec::begin() const {
   return pimpl_->first();
 }
 
-inline StrVec::Iter StrVec::end() const {
+StrVec::Iter StrVec::end() const {
   return pimpl_->last();
 }
 
-inline size_t StrVec::size() const {
+size_t StrVec::size() const {
   return end() - begin();
 }
 
-inline size_t StrVec::capacity() const {
+size_t StrVec::capacity() const {
   return pimpl_->end() - begin();
 }
 

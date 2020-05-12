@@ -16,16 +16,16 @@ cc_library(
   deps = []
 )
 
-## cc_test(
-##   name = "str_vec_test",
-##   srcs = [
-##     "str_vec_test.cc"
-##   ],
-##   deps = [
-##     ":str_vec",
-##   ]
-## )
-## 
+cc_test(
+  name = "str_vec_test",
+  srcs = [
+    "str_vec_test.cc"
+  ],
+  deps = [
+    ":str_vec",
+  ]
+)
+
 ## cc_test(
 ##   name = "str_vec_impl_test",
 ##   srcs = [

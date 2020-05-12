@@ -1,4 +1,3 @@
-#include <iostream>
 #include <gtest/gtest.h>
 
 #include "str_vec.h"
@@ -41,7 +40,7 @@ class StrVecTest : public ::testing::Test {
 // }
 
 TEST_F(StrVecTest, HandlePushBack) {
-  v.push_back("hello");
+//   v.push_back("hello");
 //   EXPECT_EQ(v.size(), 1);
 //   EXPECT_EQ(v.capacity(), 1);
 //
