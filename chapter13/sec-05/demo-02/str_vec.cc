@@ -1,13 +1,13 @@
-#include "str_vec_impl.h"
 #include "str_vec.h"
+#include "str_vec_impl.h"
 
 namespace cp {
 
-StrVec::StrVec(int sz) {
+StrVec::StrVec(int sz) : pimpl_(new StrVecImpl()) {
   pimpl_->create(sz);
 }
 
-StrVec::StrVec(std::initializer_list<std::string> il) {
+StrVec::StrVec(std::initializer_list<std::string> il) : pimpl_(new StrVecImpl()) {
   pimpl_->create(il.begin(), il.end());
 }
 
@@ -15,7 +15,7 @@ StrVec::~StrVec() {
   pimpl_->uncreate();
 }
 
-StrVec::StrVec(const StrVec& rhs) {
+StrVec::StrVec(const StrVec& rhs) : pimpl_(new StrVecImpl()) {
   pimpl_->create(rhs.begin(), rhs.end());
 }
 
