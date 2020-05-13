@@ -55,8 +55,52 @@ TEST_F(StrVecTest, HandleIterator) {
   EXPECT_EQ(input, output);
 }
 
+TEST_F(StrVecTest, HandleReserve) {
+  cp::StrVec v1({"hello", "world", "hello", "cpp"});
+  EXPECT_EQ(v1.size(), 4);
+  EXPECT_EQ(v1.capacity(), 8);
+
+  v1.reserve(7);
+  EXPECT_EQ(v1.size(), 4);
+  EXPECT_EQ(v1.capacity(), 8);
+
+  v1.reserve(8);
+  EXPECT_EQ(v1.size(), 4);
+  EXPECT_EQ(v1.capacity(), 8);
+}
+
+TEST_F(StrVecTest, HandleResize) {
+  cp::StrVec v1({"hello", "world", "hello", "cpp"});
+  EXPECT_EQ(v1.size(), 4);
+  EXPECT_EQ(v1.capacity(), 8);
+
+  v1.resize(4);
+  EXPECT_EQ(v1.size(), 4);
+  EXPECT_EQ(v1.capacity(), 8);
+
+  v1.resize(3);
+  EXPECT_EQ(v1.size(), 3);
+  EXPECT_EQ(v1.capacity(), 8);
+
+  v1.resize(5);
+  EXPECT_EQ(v1.size(), 5);
+  EXPECT_EQ(v1.capacity(), 8);
+
+  v1.resize(8);
+  EXPECT_EQ(v1.size(), 8);
+  EXPECT_EQ(v1.capacity(), 8);
+
+  v1.resize(10);
+  EXPECT_EQ(v1.size(), 10);
+  EXPECT_EQ(v1.capacity(), 10);
+}
+
 TEST_F(StrVecTest, HandlePushBack) {
   std::vector<std::string> in({"hello","world","hello","cap","hello","gtest"});
+
+  EXPECT_EQ(v.size(), 0);
+  EXPECT_EQ(v.capacity(), 1);
+
   v.push_back(in[0]);
   EXPECT_EQ(v.size(), 1);
   EXPECT_EQ(v.capacity(), 1);

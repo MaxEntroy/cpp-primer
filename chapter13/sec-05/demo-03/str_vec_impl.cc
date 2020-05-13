@@ -1,8 +1,10 @@
 #include "str_vec_impl.h"
 
+#include <algorithm>
+
 namespace cp {
 
-void StrVecImpl::create(int sz) {
+void StrVecImpl::create(size_t sz) {
   alloc_mem(sz);
 
   for(Iter it = first_; it != last_; it++) {
@@ -24,25 +26,23 @@ void StrVecImpl::uncreate() {
   alloc_.deallocate(first_, end_ - first_);
 }
 
-void StrVecImpl::realloc_mem() {
-  int cap = end_ - first_;
-  int new_cap = cap * 2;
-  Iter new_first = alloc_.allocate(new_cap);
+void StrVecImpl::realloc_mem(size_t n) {
+  Iter new_first = alloc_.allocate(n);
+  Iter new_last = new_first;
 
-  // std::uninitialized_copy(first_, last_, new_first);
-  for(Iter it = first_, new_it = new_first; it != last_; it++, new_it++) {
-    alloc_.construct(new_it, std::move(*it));
+  for(Iter it = first_; it != last_; it++) {
+    alloc_.construct(new_last++, std::move(*it));
   }
 
   uncreate();
 
   first_ = new_first;
-  last_ = first_ + cap;
-  end_ = first_ + new_cap;
+  last_ = new_last;
+  end_ = first_ + n;
 }
 
-void StrVecImpl::alloc_mem(int sz) {
-  int cap = sz?2*sz:1;
+void StrVecImpl::alloc_mem(size_t sz) {
+  size_t cap = sz?2*sz:1;
 
   first_ = alloc_.allocate(cap);
   last_ = first_ + sz;
