@@ -230,5 +230,226 @@ deleted if the class has a const or reference member.
 [move_constructor](https://en.cppreference.com/w/cpp/language/move_constructor)<br>
 [move_assignment](https://en.cppreference.com/w/cpp/language/move_assignment)<br>
 
+#### Rvalues Are Moved, Lvalues Are Copied ...
+
+q:rt?
+>When a class has both a move constructor and a copy constructor, the compiler uses
+ordinary function matching to determine which constructor to use
+
+```cpp
+StrVec v1, v2;
+v1 = v2; // v2 is an lvalue; copy assignment
+StrVec getVec(istream &); // getVec returns an rvalue
+v2 = getVec(cin); // getVec(cin) is an rvalue; move assignment
+```
+
+#### ...But Rvalues Are Copied If There Is No Move Constructor
+
+q:但是copy constructor的接口和move constructor的接口不同，又为什么能调用呢？
+>参考demo-02，copy construtor/copy assignment的参数是const T&，可以绑定到rvalue上。所以接口是兼容的。
+这也是为什么copy semantics的两个接口都必须采用const T&的原因
+
+#### Copy-and-Swap Assignment Operators and Move
+
+q:对于HasPtr，我们应该如何支持move operations?
+这里需要特别强调的是，HasPtr的operator=实现采用了swap technique，这也导致对于move assignment operator的实现有另外一种风格
+
+我们先讨论正常的版本，copy operator=不采用swap technique
+```cpp
+~HasPtr() {
+  if(pstr_) {
+    delete pstr_;
+  }
+}
+
+HasPtr(const HasPtr&);
+HasPtr& operator=(const HasPtr&);
+HasPtr(HasPtr&&);
+HasPtr& operator=(HasPtr&&);
+
+HasPtr v1, v2;
+v1 = v2; // 参数是lvalue，只能调用copy assignment
+
+v1 = GetHasPtr() // 参数是rvalue，有move assignment则优先调用
+```
+
+看swap technique的版本
+```cpp
+~HasPtr() {
+  if(pstr_) {
+    delete pstr_;
+  }
+}
+
+HasPtr(const HasPtr&);
+HasPtr& operator=(HasPtr); // 参数不是引用，不会直接匹配左值引用或右值引用。值传递兼顾了copy assighment and move assignment
+HasPtr(HasPtr&&);
+
+HasPtr v1, v2;
+v1 = v2; // v2是实参，左值，调用copy constructor初始化形参。形参要发生valuelike copy
+
+v1 = std::move(v2) // v2是左值，不是实参。std::move(v2)是右值，是实参，调用move constructor初始化形参。形参移动std::move(v2)资源，没有发生资源重新分配
+// 能这么用的前提一定要清楚，v2之后就不能用了
+```
+
+**Updating the Rule of Three**
+
+>All five copy-control members should be thought of as a unit: Ordinarily, if a
+class defines any of these operations, it usually should define them all.
+
+上面这个其实跟具体讲的也不完全一样，我总结一个我认可的版本
+
+- Classes That Need Destructors Need Copy and Assignment
+- Classes That Need Copy Need Assignment, and Vice Versa
+- Classes that define the move constructor and move-assignment operator can avoid this overhead in
+those circumstances where a copy isn’t necessary.(即当我们有必要定义copy operation的时候，也定义move operation)
+
+#### Move Operations for the Message Class
+
+q:本小节的意义?
+>Classes that define their own copy constructor and copy-assignment operator
+generally also benefit by defining the move operations.
+
+#### Move Iterators
+
+q:rt?
+>对于iterator，采用deference会返回lvalue，参考我们realloc_mem的代码
+这导致我们不能使用uninitialized_copy
+
+```cpp
+void StrVec::realloc_mem() {
+  int cap = capacity();
+  int new_cap = cap * 2;
+  Iter new_first = alloc_.allocate(new_cap);
+  Iter new_last = new_first;
+
+  // std::uninitialized_copy(first_, last_, new_last_);
+  for(Iter it = first_; it != last_; ++it) {
+    alloc_.construct(new_last++, std::move(*it));
+  }
+
+  uncreate();
+
+  first_ = new_first;
+  last_ = new_last;
+  end_ = first_ + new_cap;
+}
+```
+
+q:make_move_iterator的作用是什么？
+>This function takes an iterator and returns a move
+iterator
+>
+>the dereference operator of a move iterator yields
+an rvalue reference.
+>
+>使用它的语义是一样的，如果要用move iterator，必要保证iterator所关联的对象，之后不再使用
+
+q:有哪些坑？
+- It is worth noting that standard library makes no guarantees about which algorithms
+can be used with move iterators and which cannot.
+- Because moving an object can
+obliterate the source, you should pass move iterators to algorithms only when you are
+confident that the algorithm does not access an element after it has assigned to that
+element or passed that element to a user-defined function.
+
+**Advice: Don’t Be Too Quick to Move**
+
+1. Because a moved-from object has indeterminate state, calling std::move on
+an object is a dangerous operation. When we call move, we must be
+absolutely certain that there can be no other users of the moved-from object.
+2. Judiciously used inside class code, move can offer significant performance
+benefits. Casually used in ordinary user code (as opposed to class
+implementation code), moving an object is more likely to lead to mysterious
+and hard-to-find bugs than to any improvement in the performance of the
+application
+
+**Best Practices**
+
+Outside of class implementation code such as move constructors or
+move-assignment operators, use std::move only when you are certain
+that you need to do a move and that the move is guaranteed to be safe.
+
 ### 13.6.3. Rvalue References and Member Functions
 
+### 实践
+
+- demo-01
+
+在sec-05-demo-1基础上，修改了如下问题：
+1. 修复了create(ConstIter b, ConstIter e)
+2. 支持move operation
+3. realloc_mem使用std::move(std::string);
+
+q:碰到一个问题，返现move constructor无法触发？
+
+```cpp
+StrVec GetStrVec() {
+  return v;
+}
+StrVec v = GetStrVec();
+// 这一段代码无法触发move constructor
+```
+
+1. 具体原因参考[Copy elision](https://en.cppreference.com/w/cpp/language/copy_elision)
+2. operator assignment没有问题
+3. GetStrVec返回一个左值，这没问题。但是从表达式来看，GetStrVec的调用显然会生成一个临时对象，毋庸置疑
+
+q:那么如何调用move constructor呢？
+```cpp
+StrVec GetStrVec() {
+  return std::move(v);
+}
+// 1. std::move作用于即将被析构的lvalue
+// 2. v符合这个条件，从而临时对象直接移动v的资源
+// 3.最后的结果少了一次构造，不管是否使用std::move，所以这里我们不清楚编译器做了何种优化
+```
+
+**std::move可以作用于lvalue来产生rvalue ref.**
+
+参考<br>
+[is-an-object-guaranteed-to-be-moved-when-it-is-returned](https://stackoverflow.com/questions/11088023/is-an-object-guaranteed-to-be-moved-when-it-is-returned)
+[c11-rvalues-and-move-semantics-confusion-return-statement](https://stackoverflow.com/questions/4986673/c11-rvalues-and-move-semantics-confusion-return-statement?lq=1)
+
+- demo-02
+
+主要对于Rvalues Are Copied If There Is No Move Constructor来做实验
+
+```cpp
+cp::StrVec v1({"hello", "world", "hello", "cpp"});
+v = v1;
+EXPECT_EQ(v.size(), 4);
+EXPECT_EQ(v.capacity(), 8);
+
+cp::StrVec v2;
+v2 = GetStrVec();
+/*
+StrVec& operator= called.
+GetStrVec() called.
+StrVec(StrVec&) called. // v产生临时对象，v是lvalue
+StrVec& operator=(StrVec&&) called. // 临时对象赋值给v2，调用move assignment
+*/
+```
+
+按照实验要求，我们禁止move assignment
+```cpp
+/*
+StrVec& operator= called.
+GetStrVec() called.
+StrVec(StrVec&) called.
+StrVec& operator= called. // copy assignment被调用
+*/
+```
+
+但是，如果我们修改copy assignment的声明
+```cpp
+StrVec& operator=(StrVec&);
+/*
+no match for 'operator=' (operand types are 'cp::StrVec' and 'cp::StrVec')
+*/
+```
+原因在于，non-const lvalue ref不能绑定到rvalue，所以，对于copy control member的参数，采用const ref是有原因的。
+
+- demo-03
+
+实现move iterator
