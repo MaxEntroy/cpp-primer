@@ -381,7 +381,7 @@ that you need to do a move and that the move is guaranteed to be safe.
 2. 支持move operation
 3. realloc_mem使用std::move(std::string);
 
-q:碰到一个问题，返现move constructor无法触发？
+q:碰到一个问题，发现move constructor无法触发？
 
 ```cpp
 StrVec GetStrVec() {
@@ -453,3 +453,14 @@ no match for 'operator=' (operand types are 'cp::StrVec' and 'cp::StrVec')
 - demo-03
 
 实现move iterator
+
+- demo-04
+
+通过支持move ctor来支持move assignment，这种方法的特点是
+1. 使用copy-and-swap技术来实现assignment
+2. 增加move ctor，同时支持了move assignment
+3. 为了触发move assignment，调用时需要lhs = std::move(rhs)这种形式
+
+- demo-05
+
+课后习题，正常实现move ctor and move assignment
