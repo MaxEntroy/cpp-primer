@@ -301,6 +301,22 @@ class DBImpl : public DB {
 1. 一个类需要析构函数，是需要copy constructor and copy assignment operator的充分非必要条件。
 2. 一个类需要copy constructor是一个类需要copy assignment operator的充要条件。
 
+但是这里还需要关注另一个问题
+1. 当我们增加析构函数的时候，通常是为了释放管理的资源。
+2. 既然管理资源，那么我们需要增加copy ctor/copy assignment，因为这两个函数也牵扯到类似的问题
+3. 但是，当我们使用inheritance的时候，为了让派生类可以被正常的析构，此时需要在基类当中增加一个dtor
+4. 根据Rule of three，增加了dtor，需要增加copy ctor/copy assignment。但是，rule of three的起因是因为资源管理，但这里根本不涉及资源管理
+
+q:所以，是否要教条的按照rule of three，对于基类使用这条规则?
+>还是需要使用。但不是教条理解。虽然上面说的也合理。但是也有别的考虑。
+因为显示定义一个析构函数，编译器会隐藏copy ctor/copy assignment(std=c++11不存在这样的问题)，为了对于老版本的编译器，需要一个析构，但是又依赖默认的copy ctor/copy assignment情形
+此时会出问题。
+对于这类问题，其实依赖默认的版本就行，但是还要自己定义，如果再写函数体，会显得很麻烦。c++11提供了default关键字可以解决这个问题。主要针对需要显示定义，但又依赖默认行为的场景。
+
+[Does [C++11: 12.8/7] make sense?](https://stackoverflow.com/questions/8849823/does-c11-12-8-7-make-sense/8849975#8849975)<br>
+[被忽略的C++11规则](https://blog.csdn.net/SalmonRun/article/details/9765625)
+
+
 ### 13.1.5. Using = default
 
 q:default的作用?
