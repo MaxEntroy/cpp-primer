@@ -10,6 +10,25 @@ performance boost.
 2. When classes(unique_ptr or IO buffer) have a resource that may not be shared, objects of these types
 can’t be copied but can be moved.
 
+**那么我们需要对左值右值的概念，做一个精确认知的时候了**
+1. (13.6.1)Recall that lvalue and rvalue are properties of an expression(Some
+expressions yield or require lvalues; others yield or require rvalues.)
+2. (4.1.1)Every expression in C++ is either an rvalue (pronounced “are-value”) or an lvalue
+3. (13.6.1)Generally speaking, an lvalue expression refers to an object’s identity whereas an rvalue expression refers
+to an object’s value.
+
+以上是一个大致正确的认知，即结论都正确，都可能包含不够细。第三点是非常重要的一个区别
+
+4.1.1.是从3个方面进行详细区分的
+1. (opnd角度)Roughly speaking, when we use an object as an rvalue,
+we use the object’s value (its contents). When we use an object as an lvalue, we use
+the object’s identity (its location in memory).
+2. (optr角度)Operators differ as to whether they require lvalue or rvalue operands and as to
+whether they return lvalues or rvalues.
+ps: As we present the operators, we will note whether an operand must be an lvalue and
+whether the operator returns an lvalue.
+3. Lvalues and rvalues also differ when used with decltype
+
 ### 13.6.1. Rvalue Rerefences
 
 q:motivation?
@@ -372,6 +391,133 @@ that you need to do a move and that the move is guaranteed to be safe.
 
 ### 13.6.3. Rvalue References and Member Functions
 
+#### Basis
+
+q:member functions是否可以提供rvalue ref作为函数参数?
+>可以。
+Member functions other than constructors and assignment can benefit from providing
+both copy and move versions.
+>
+>和copy ctor/copy assignment类似的是，可以提供两个版本：
+1. one version takes an lvalue reference to const
+2. second takes an rvalue reference
+to nonconst.
+
+q:member function提供rvalue ref的意义何在？
+>只要 提供rvalue ref的意义都是一样的，避免不必要的拷贝，提升性能
+
+```cpp
+void StrVec::push_back(const string& s)
+{
+chk_n_alloc(); // ensure that there is room for another element
+// construct a copy of s in the element to which first_free points
+alloc.construct(first_free++, s);
+}
+
+void StrVec::push_back(string &&s)
+{
+chk_n_alloc(); // reallocates the StrVec if necessary
+alloc.construct(first_free++, std::move(s));
+}
+```
+我们看上面这段标准代码，可能有如下问题：
+1. 第二个版本，s是一个rvalue ref
+2. 但是construct的时候，对于一个rvalue ref调用std::move(s)
+3. 这里的矛盾在于，一个rvalue ref，不需要调用std::move来生成一个rvalue ref
+
+针对上面的问题，我们需要回顾之前的一个小节
+
+**Variables Are Lvalues**
+
+```cpp
+int &&rr1 = 42; // ok: literals are rvalues
+int &&rr2 = rr1; // error: the expression rr1 is an lvalue!
+int &&rr3 = std::move(rr1); // ok
+```
+
+这里我们更清楚了：
+1. lvalue ref和rvalue ref的区别是他们所关联的值，具有不同的属性.lvalue ref只能绑定lvalue，rvalue ref只能绑定rvalue
+2. 具体对于lvalue ref和rvalue ref来说，rvalue ref绑定了一个rvalue，那么我们可以通过rvalue ref来窃取它所关联的rvalue的数据
+3. 但是，lvalue ref和rvalue ref本身都是lvalue，引用也是一个变量
+
+再回头来看上面的代码，应该是这样：
+1. 第一个版本，s是一个左值，是一个左值引用。那么，s的值不能被窃取。
+2. 第二个版本，s是一个左值，是一个右值引用。那么，s的值，可以被窃取。
+3. 但是两个版本都没有直接窃取s的值，而是在子调用construct当中进行窃取
+4. 如果需要在construct当中进行窃取，我们必须告诉construct，传递给它的是一个rvalue ref。因为s在push_back中可窃取，但是construct并没有这个信息，除非在接口处告诉它
+5. 所以，第二个版本，s在当前调用中可窃取，但是窃取发生在子调用construct当中，所以需要对s调用std::move来告诉construct，s可窃取
+
+#### Rvalue and Lvalue Reference Member Functions
+
+我们先来看下面一段代码
+```cpp
+int main(void) {
+  std::string s1("hello");
+  std::string s2("world");
+
+  auto it = (s1 + s2).find('l');
+  std::cout << it << std::endl;
+  return 0;
+}
+// 2
+
+int main(void) {
+  std::string s1("hello");
+  std::string s2("world");
+
+  s1 + s2 = "wow"; // ok
+  // std::cout << s1 + s2 = "wow"; error
+
+  return 0;
+}
+```
+
+上面两段代码均可以正常编译执行，可能会让人感到吃惊：
+1. 右值居然可以调用成员函数
+2. 右值居然可以被赋值(简单理解，右值只能出现在=右侧)
+
+**那么我们需要对左值右值的概念，做一个精确认知的时候了**
+1. (13.6.1)Recall that lvalue and rvalue are properties of an expression(Some
+expressions yield or require lvalues; others yield or require rvalues.)
+2. (4.1.1)Every expression in C++ is either an rvalue (pronounced “are-value”) or an lvalue
+3. (13.6.1)Generally speaking, an lvalue expression refers to an object’s identity whereas an rvalue expression refers
+to an object’s value.
+
+以上是一个大致正确的认知，即结论都正确，都可能包含不够细。第三点是非常重要的一个区别
+
+4.1.1.是从3个方面进行详细区分的
+1. (opnd角度)Roughly speaking, when we use an object as an rvalue,
+we use the object’s value (its contents). When we use an object as an lvalue, we use
+the object’s identity (its location in memory).
+2. (optr角度)Operators differ as to whether they require lvalue or rvalue operands and as to
+whether they return lvalues or rvalues.
+ps: As we present the operators, we will note whether an operand must be an lvalue and
+whether the operator returns an lvalue.
+3. Lvalues and rvalues also differ when used with decltype
+
+从这个角度讲，上面的代码是合理的，对于第二段代码，虽然我们把一个右值赋给另一个右值，但是左侧的右值并没有使用identiy，所以不矛盾。
+
+q:那么我们这一小节的目的在哪呢？
+>we’d like to force the left-hand operand (i.e., the object to which this points)
+to be an lvalue. 
+
+q:对于上一个问题，how to do that?
+>we place a reference qualifier after the parameter list. We indicate the lvalue/rvalue property of this in the same way that we define
+const member functions.
+>
+>这样就可以避免类似(s1 + s2).find('l');的调用，此时this只能指向一个lvalue，或者一个rvalue
+
+q:这么做的一些细节？
+1. The reference qualifier can be either & or &&, indicating that this may point to an
+rvalue or lvalue, respectively.
+2. We may run a function qualified by & only on an lvalue and may run a function
+qualified by && only on an rvalue
+3. A reference qualifier may
+appear only on a (nonstatic) member function and must appear in both the
+declaration and definition of the function.
+
+注意细节当中的Only作用范围
+
 ### 实践
 
 - demo-01
@@ -450,7 +596,7 @@ no match for 'operator=' (operand types are 'cp::StrVec' and 'cp::StrVec')
 ```
 原因在于，non-const lvalue ref不能绑定到rvalue，所以，对于copy control member的参数，采用const ref是有原因的。
 
-- demo-03
+- demo-03(这是一个标准demo)
 
 实现move iterator
 
