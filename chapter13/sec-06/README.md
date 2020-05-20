@@ -58,7 +58,7 @@ q:对于rvalue ref关联的对象，有什么特点？
 1. The referred-to object is about to be destroyed
 2. There can be no other users of that object
 
-####　Variables Are Lvalues
+#### Variables Are Lvalues
 
 ｑ:rt(讨论这个话题意义何在)?
 >Although we rarely think about it this way, a variable is an expression with one
