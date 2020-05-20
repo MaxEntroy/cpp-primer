@@ -518,6 +518,65 @@ declaration and definition of the function.
 
 注意细节当中的Only作用范围
 
+#### Overloading and Reference Functions
+
+q:rt?
+>Just as we can overload a member function based on whether it is const (§ 7.3.2, p.
+276), we can also overload a function based on its reference qualifier.Moreover, we
+may overload a function by its reference qualifier and by whether it is a const
+member
+
+q:什么时候我们应该考虑使用reference qualifier进行修饰？
+>作者举了一个例子，本质上来说。还是当需要避免对象拷贝时，尤其当对象也管理资源的时候.
+具体，
+we’d like to force the left-hand operand (i.e., the object to which this points)
+to be an lvalue.
+>
+>当我们需要明确哪些方法只有lvalue能调用，哪些方法只有rvalue能调用时使用这个修饰符
+
+```cpp
+class Foo {
+ public:
+  Foo sorted() &&; // may run on modifiable rvalues
+  Foo sorted() const &; // may run on any kind of Foo
+
+  // other members of Foo
+ private:
+  vector<int> data;
+};
+
+// this object is an rvalue, so we can sort in place
+Foo Foo::sorted() &&
+{
+  sort(data.begin(), data.end());
+  return *this;
+}
+// this object is either const or it is an lvalue; either way we can't sort in place
+Foo Foo::sorted() const & {
+  Foo ret(*this); // make a copy
+  sort(ret.data.begin(), ret.data.end()); // sort the copy
+  return ret; // return the copy
+}
+```
+我们来分析上面的代码：
+1. reference qualifier用来修饰this，表明调用对象左值或者右值的属性。第一个函数采用&&声明，表示
+调用对象是一个右值，那么这是即将销毁的对象，所以我们排序改变对象的成员没有问题，最后返回的时候，不再发生拷贝，直接move.
+但是我要强调的是，对于sort操作，vector<int>的成员在进行swap的操作的时候，我不认为会采用move ctor(这里可以验证)，因为data并不是rvalue。
+&&修饰只说明调用的对象即将被销毁。这里有这个混淆，证明左右值的本质还是没有搞明白，左右值是表达式的属性。如果不结合操作(表达式)来说，没有任何意义。
+所以，data是不是rvalue和返回值对象是不是rvalue没有关系。要结合操作来说
+2. 第二段函数也好理解，const修饰，不能修改值，所以先复制。
+
+q:使用reference qualifier时有什么需要注意的地方?
+>There is no similar default for reference qualified functions
+When we define two or more members that have the
+same name and the same parameter list, we must provide a reference qualifier on all
+or none of those functions
+>
+>reference qualifier如果要提供，必须全部提供
+
+**If a member function has a reference qualifier, all the versions of that
+member with the same parameter list must have reference qualifiers.**
+
 ### 实践
 
 - demo-01
@@ -610,3 +669,7 @@ no match for 'operator=' (operand types are 'cp::StrVec' and 'cp::StrVec')
 - demo-05
 
 课后习题，正常实现move ctor and move assignment
+
+- demo-06
+
+自己实现了一个StrPtr，贯穿了本章的一些知识点
