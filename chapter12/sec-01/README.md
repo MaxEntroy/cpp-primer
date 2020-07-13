@@ -76,7 +76,7 @@ q:如何设计一个collection of string的类型，要求该类型采用共享�
 >
 >首先，这肯定是一个sequential string container，那么我们如何组织。按照整体原则，考虑库的情形，vector<string>是首选。
 >
->其次，共享语义如何实现。如果将vector<string>作为类的成员，那么vector<string>的life time也就是class object的life time.加入把一个对象赋值给另一个对象，考虑vector<string>的assigning语义，完成深拷贝。即，共享语义没有实现。
+>其次，共享语义如何实现。如果将vector<string>作为类的成员，那么vector<string>的life time也就是class object的life time.假如把一个对象赋值给另一个对象，考虑vector<string>的assigning语义，完成深拷贝。即，共享语义没有实现。
 从另一个角度说，即使是浅拷贝。那么一个对象析构，无论如何vector<string>也会被回收。另外一个对象还是无法完成共享语义。
 >答案就是，把vector<string>分配到dynamic memory，我们自己来控制它的lifetime.
 那么紧接而来又是另一个问题，如何管理？按着整体的设计原则，尽量使用基础库。我们考虑smart pointer。那么我们该使用哪一个呢？
@@ -334,7 +334,7 @@ void process(destionation* p_des) {
 2. default, when a shared_ptr is destroyed, it executes delete on the pointer it holds. 同理，如果我们希望回收connection资源，我们也需要重新定义deleter函数，来处理内部的plain pointer
 
 ```cpp
-void close_connection(connection* p_conn) {disconnect(*p_conn);}
+void end_connection(connection* p_conn) {disconnect(*p_conn);}
 // disconnect不能作为deleter的原因在于，deleter的参数，必须是T*，因为shared_ptr在实现的时候，回调接口就是这么设计的
 
 connection conn = connect(&des);
