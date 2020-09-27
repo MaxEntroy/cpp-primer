@@ -356,6 +356,22 @@ q: =default vs =delete?
 第一点，对于=default，这个可以在定义的时候使用，本质是告诉编译器生成默认的代码。
 第二点，default只能用于那些编译器会帮助和你合成的函数身上，自然不适用于所有函数
 
+q:deleted functions should be private?
+>According to C.81 in c++ core guidelines, Note that deleted functions should be public.
+>那么，为什么呢？从语义上说，声明为private也没有问题。
+>
+>They are different only wrt the produced diagnostics. If you make it private, an additional and superfluous access violation is reported.
+参考stackover flow的回答，我们明白意思是说，这回引入多余的报警。会覆盖我们更关心的报警。
+比如，某一个函数被声明为deleted，那么这个函数在任何时候都不能被调用。但是，如果把它同时用private修饰，我们发现此时编译器的报警只会说
+这是个private函数，不能显示调用。但，其实它根本不能被调用。
+>
+>使用deleted目的是，替换以前private声明+无定义这种形式，将错误从liking-time前移到compile time.
+
+参考<br>
+[c++ core guidelines](https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines)<br>
+[Must a deleted constructor be private?](https://stackoverflow.com/questions/18931133/must-a-deleted-constructor-be-private)
+
+
 #### The Destructor Should Not be a Deleted Member
 
 q:destructor = delete的语义是什么?
