@@ -660,6 +660,7 @@ class Derived : public Base {
 下面给出结论：
 1. 基类需要给出default ctor声明/定义
 2. 基类需要给出virtual dtor声明/定义，当virtual dtor是pure virtual时，则不需要
+3. 基类不区别abstract or not, 有区别的只是在virtual dtor是否是pure virtual时
 
 参考
 [class.dtor](https://eel.is/c++draft/class.dtor)<br>
