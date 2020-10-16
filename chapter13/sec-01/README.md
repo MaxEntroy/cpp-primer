@@ -516,3 +516,151 @@ class Foo {
 
 参考<br>
 [thread-safe-initialization-of-a-singleton)](https://www.modernescpp.com/index.php/thread-safe-initialization-of-a-singleton)
+
+- demo-07/demo-08
+
+这两个demo是补充demo，cpp-primer当中并没有进行直接的讨论。我讨论的初衷来源于leveldb当中的一段代码，如下
+
+```cpp
+// leveldb
+class LEVELDB_EXPORT DB {
+ public:
+  // Open the database with the specified "name".
+  // Stores a pointer to a heap-allocated database in *dbptr and returns
+  // OK on success.
+  // Stores nullptr in *dbptr and returns a non-OK status on error.
+  // Caller should delete *dbptr when it is no longer needed.
+  static Status Open(const Options& options, const std::string& name,
+                     DB** dbptr);
+
+  DB() = default;
+
+  DB(const DB&) = delete;
+  DB& operator=(const DB&) = delete;
+
+  virtual ~DB();
+  // ...
+```
+
+对于rule of three，没什么好说的。这是一个abstract class，下面的pure virtual functions省略了。所以，virtual dtor没有给出实现，因为该类不能构造对象，自然，也不用析构对象。
+但是，default ctor为什么要给出呢?这点我不是很理解
+
+我分别做了两个实验，demo-07给出的base不是abstract class, demo-08则给出abstract class
+
+```cpp
+// base.h
+#ifndef BASE_H_
+#define BASE_H_
+
+#include <iostream>
+
+class Base {
+ public:
+  Base() = default;
+
+  Base(const Base&) = delete;
+  Base& operator=(const Base&) = delete;
+
+  virtual ~Base() = default;
+
+  virtual void Print() {
+    std::cout << "Base::Print() called." << std::endl;
+  }
+
+};
+
+#endif
+
+// derived.h
+#ifndef DERIVED_H_
+#define DERIVED_H_
+
+#include <iostream>
+
+#include "base.h"
+
+class Derived : public Base {
+ public:
+  Derived() : val_(0) {}
+
+  Derived(const Derived&) = delete;
+  Derived& operator=(const Derived&) = delete;
+
+  void Print() override {
+    std::cout << "Derived::Print() called." << std::endl;
+  }
+
+ private:
+  int val_;
+};
+
+#endif
+```
+
+上面这段代码解释下：
+1. 基类forbid copy semantics, 派生类自然也需要实现对应的语义
+2. 基类其实没有特殊的dtor操作，但是无法保证派生类没有，所以需要给出virtual dtor声明。此处，也同时必须给出实现，因为如果只给出声明，编译器不会再合成一个版本。而此时没有定义，base ojb无法dtor.因为这不是abstrct class.
+3. 基类需要给出default ctor，虽然基类没有特殊操作，但是由于显示定义了copy ctor/assign，所以编译器不会合成default ctor，对于基类没有影响(如果不定义基类对象)。但是，如果定义派生类对象，派生类会基类的部分进行ctor，但是此时没有default ctor，导致构造失败。所以，基类必须给出default ctor.
+
+现在，基类变成了abstract class，我们来看看结论是否有改变
+```cpp
+// base.h
+#ifndef BASE_H_
+#define BASE_H_
+
+#include <iostream>
+
+class Base {
+ public:
+  Base() = default;
+
+  Base(const Base&) = delete;
+  Base& operator=(const Base&) = delete;
+
+  virtual ~Base() = default;
+
+  virtual void Print() = 0;
+
+};
+
+#endif
+
+// derived.h
+#ifndef DERIVED_H_
+#define DERIVED_H_
+
+#include <iostream>
+
+#include "base.h"
+
+class Derived : public Base {
+ public:
+  Derived() : val_(0) {}
+
+  Derived(const Derived&) = delete;
+  Derived& operator=(const Derived&) = delete;
+
+  void Print() override {
+    std::cout << "Derived::Print() called." << std::endl;
+  }
+
+ private:
+  int val_;
+};
+
+#endif
+```
+
+1. copy semantics这里不变。基类禁止，派生类禁止。
+2. default ctor. 我最初的理解，abstract class，没有定义对象的能力。所以无需给出default ctor，声明和定义都不用给出。但实际上，声明和定义都需要给出。派生类构造时，任然需要调用。
+3. default dtor. 我最初的理解，给出声明即可，但是定义则不需要。声明是以为，无路如何，基类需要给出virtula dtor.不给出定义，则是因为，基类不定义对象，不需要实际析构。但是，还是要给出定义。原因如下：
+
+>The solution is to ensure that all virtual methods that are not pure are defined. Note that a destructor must be defined even if it is declared pure-virtual [class.dtor]/7.
+
+下面给出结论：
+1. 基类需要给出default ctor声明/定义
+2. 基类需要给出virtual dtor声明/定义，当virtual dtor是pure virtual时，则不需要
+
+参考
+[class.dtor](https://eel.is/c++draft/class.dtor)<br>
+[Undefined reference to vtable](https://stackoverflow.com/questions/3065154/undefined-reference-to-vtable)
