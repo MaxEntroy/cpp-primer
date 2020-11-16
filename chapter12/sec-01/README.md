@@ -632,6 +632,28 @@ B() called.
 3. 先析构b_ptr(此时shared_rc==2, weak_rc == 2)，析构shared_rc--, weak_rc--(shared_rc==1, weak_rc==1)，不对manage object进行析构。
 4. 再析构a_ptr(shared_rc==1, weak_rc==2)，shared_rc--(shared_rc==0，weak_rc==1此时会触发对于manage object的析构，即进行class A的析构，调用A的析构函数。所以先输~A() called.由于class A内部包含std::shared_ptr<B>，此时对于该smart pointer再次进行析构，该smart pointer object，shared_rc--，weak_rc--(shared_rc==0, weak_rc==0)触发对于class B的析构，调用B的析构函数，输出~B() called. 并且由于b_ptr的weak_rc==0，所以b_ptr的control block也会发生析构。由于B内部包含weak_ptr<A>，此时weak_rc--,weak_rc==0, ptr_a的control black进行析构)
 
+#### 补充
+
+这一小节补充一些重要但上文未提到的知识
+
+q:什么时候使用dynamic memory/stack memory?
+我们主要来说dynamic memory，除此之外的就是stack memory适用的场景。这里主要分两种case进行讨论
+1. classes with resources. <br>
+1.1. They don’t know how many objects they’ll need<br>
+1.2. They don’t know the precise type of the objects they need<br>
+1.3. They want to share data between several objects<br>
+2. user code<br>
+2.1.creating huge objects on the heap.<br>
+2.2.Use the heap when the data in the variable is needed beyond the lifetime of the current function(scope).(Use the stack when your variable will not be used after the current function returns)<br>
+
+q:什么时候使用plain pointer/smart pointer?
+>关于smart pointer的适用时机我们非常清楚，但是plain pointer呢？modern c++有什么特别的语义。这里参考core guidelines的items
+F.22: Use T* or owner<T*> to designate a single object
+
+参考<br>
+[When is it best to use the stack instead of the heap and vice versa?](https://stackoverflow.com/questions/102009/when-is-it-best-to-use-the-stack-instead-of-the-heap-and-vice-versa)<br>
+[](https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines#S-concurrency)
+
 ### 实践
 
 - demo-01
