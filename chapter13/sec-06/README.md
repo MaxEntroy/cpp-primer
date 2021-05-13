@@ -35,6 +35,7 @@ q:motivation?
 >To support move operations
 1. Move semantics作用于即将被析构，但是要拷贝的对象
 2. 新标准引入了rvalue ref来表示即将被析构，但是要拷贝的对象。即，对于一个右值引用，我们可以放心的使用move operation.
+3. 这里要特别小心，rvalue ref可以理解为一种类型，T&& foo表示foo可以进行move operation，不用担心foo之后被使用的问题(即foo之后不能再被使用)。但是，要特别小心的是，foo本身不是rvalue，foo是lvalue.语义上并不矛盾，foo是一个lvalue，它的类型是T&&，表明它可以被move.
 
 q:what is rvalue ref?
 >An rvalue reference is a reference that must be bound to an
